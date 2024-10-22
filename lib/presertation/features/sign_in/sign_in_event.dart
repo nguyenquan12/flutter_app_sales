@@ -2,7 +2,6 @@ import 'package:equatable/equatable.dart';
 
 abstract class SignInEventBase extends Equatable {}
 
-// ignore: must_be_immutable
 class SignInEvent extends SignInEventBase {
   late String email;
   late String password;

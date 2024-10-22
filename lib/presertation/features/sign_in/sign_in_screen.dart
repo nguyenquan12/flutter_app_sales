@@ -1,10 +1,16 @@
+import 'package:app_sales/data/datasources/remote/api/authentication_api.dart';
+import 'package:app_sales/data/repositories/authentication_repository.dart';
+import 'package:app_sales/presertation/features/sign_in/sign_in_bloc.dart';
+import 'package:app_sales/presertation/features/sign_in/sign_in_event.dart';
+import 'package:app_sales/presertation/features/sign_in/sign_in_state.dart';
+import 'package:app_sales/presertation/widgets/loading_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key});
-
   @override
-  State<SignInScreen> createState() => _SignInScreenState();
+  _SignInScreenState createState() => _SignInScreenState();
 }
 
 class _SignInScreenState extends State<SignInScreen> {
@@ -12,18 +18,34 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Login screen"),
+        title: Text("Login Screen"),
       ),
-      body: SignInContainerWidget(),
+      body: MultiProvider(providers: [
+        Provider(create: (context) => AuthenticationApi()),
+        ProxyProvider<AuthenticationApi, AuthenticationRepository>(
+          create: (context) =>
+              AuthenticationRepository(context.read<AuthenticationApi>()),
+          update: (context, api, repository) {
+            return AuthenticationRepository(api);
+          },
+        ),
+        ProxyProvider<AuthenticationRepository, SignInBloc>(
+          create: (context) =>
+              SignInBloc(context.read<AuthenticationRepository>()),
+          update: (context, repository, bloc) {
+            return SignInBloc(repository);
+          },
+        ),
+      ], child: SignInContainerWidget()),
     );
   }
 }
 
 class SignInContainerWidget extends StatefulWidget {
-  const SignInContainerWidget({super.key});
+  const SignInContainerWidget({Key? key}) : super(key: key);
 
   @override
-  State<SignInContainerWidget> createState() => _SignInContainerWidgetState();
+  _SignInContainerWidgetState createState() => _SignInContainerWidgetState();
 }
 
 class _SignInContainerWidgetState extends State<SignInContainerWidget> {
@@ -32,31 +54,63 @@ class _SignInContainerWidgetState extends State<SignInContainerWidget> {
   final _passController = TextEditingController();
 
   var isPassVisible = true;
+
+  late SignInBloc bloc;
+
+  @override
+  void initState() {
+    super.initState();
+    bloc = context.read<SignInBloc>();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-        child: Container(
-      child: Column(
-        children: [
-          Expanded(
-              flex: 2, child: Image.asset("assets/images/ic_hello_food.png")),
-          Expanded(
-            flex: 4,
-            child: Container(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: BlocConsumer<SignInBloc, SignInStateBase>(
+          bloc: bloc,
+          listener: (context, state) {
+            if (state is SignInSuccess) {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(state.message)));
+              Navigator.pushReplacementNamed(context, "/home");
+            }
+            if (state is SignInError) {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(state.message)));
+            }
+          },
+          builder: (context, state) {
+            return Container(
+              child: Stack(
                 children: [
-                  _buildPhoneTextField(),
-                  _buildPasswordTextField(),
-                  _buildButtonSignIn(),
+                  Column(
+                    children: [
+                      Expanded(
+                          flex: 2,
+                          child:
+                              Image.asset("assets/images/ic_hello_food.png")),
+                      Expanded(
+                        flex: 4,
+                        child: Container(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildPhoneTextField(),
+                              _buildPasswordTextField(),
+                              _buildButtonSignIn(),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(child: _buildTextSignUp()),
+                    ],
+                  ),
+                  if (state is SignInLoading) Center(child: LoadingWidget())
                 ],
               ),
-            ),
-          ),
-          Expanded(child: _buildTextSignUp())
-        ],
-      ),
-    ));
+            );
+          }),
+    );
   }
 
   Widget _buildTextSignUp() {
@@ -141,11 +195,12 @@ class _SignInContainerWidgetState extends State<SignInContainerWidget> {
         margin: EdgeInsets.only(top: 20),
         child: ElevatedButton(
           onPressed: () {
-            // var email = _emailController.text.toString();
-            // var password = _passController.text.toString();
-            // bloc.eventSink.add(SignInEvent(email: email, password: password));
+            String email = _emailController.text.toString();
+            String password = _passController.text.toString();
+
+            bloc.add(SignInEvent(email: email, password: password));
           },
-          child: Text("Sign in"),
+          child: Text("Sign In"),
         ));
   }
 }
